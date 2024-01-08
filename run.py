@@ -3,16 +3,18 @@
 import csv
 import time
 from selenium import webdriver
-from selenium.common import NoSuchElementException
+from selenium.common import NoSuchElementException,StaleElementReferenceException,TimeoutException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 import os
 import itertools
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 class GoogleMapScraper:
     def __init__(self):
-        self.output_file_name = "google_map_business_data6.csv"
+        self.output_file_name = "google_map_business_data.csv"
         self.headless = False
         self.driver = None
         self.unique_check = []
@@ -30,7 +32,7 @@ class GoogleMapScraper:
         
 
     def save_data(self, data):
-        header = ['Название', 'Адрес', 'Категория', 'Номер телефона', 'ссылка']
+        header = ['Название', 'Адрес', 'Категория', 'Номер телефона', "Вебсайт",'Cсылка']
         is_file_empty = not os.path.isfile(self.output_file_name) or os.stat(self.output_file_name).st_size == 0
 
         with open(self.output_file_name, 'a', newline='', encoding="utf-8") as csvfile:
@@ -74,20 +76,40 @@ class GoogleMapScraper:
     def get_business_info(self):
         time.sleep(2)
         
-        for business in self.driver.find_elements(By.CLASS_NAME, 'CpccDe'):
-            name = business.find_element(By.CLASS_NAME, 'fontHeadlineSmall ').text
-            address, category = self.parse_address_and_category(business)
-            contact = self.parse_contact(business)
-            try:
-                website = business.find_element(By.CLASS_NAME, "hfpxzc").get_attribute("href")
-            except NoSuchElementException:
-                website = ""
+        businesses = self.driver.find_elements(By.CLASS_NAME, 'CpccDe')
 
-            unique_id = "".join([name, address, category, contact, website])
-            if unique_id not in self.unique_check:
-                data = [name, address, category, contact, website]
-                self.save_data(data)
-                self.unique_check.append(unique_id)
+        for business in businesses:
+            try:
+                name = business.find_element(By.CLASS_NAME, 'fontHeadlineSmall ').text
+                address, category = self.parse_address_and_category(business)
+                contact = self.parse_contact(business)
+
+                try:
+                    url = business.find_element(By.CLASS_NAME, "hfpxzc").get_attribute("href")
+                except NoSuchElementException:
+                    url = ""
+
+                try:
+                    self.driver.get(url)
+                    website_element = WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located(By.CLASS_NAME, 'CsEnBe').get_attribute("href")
+                    )
+                    website = website_element
+                    self.driver.back()
+                except (NoSuchElementException, TimeoutException):
+                    website = ""
+
+                unique_id = "".join([name, address, category, contact, website, url])
+                if unique_id not in self.unique_check:
+                    data = [name, address, category, contact, website, url]
+                    self.save_data(data)
+                    self.unique_check.append(unique_id)
+            except (NoSuchElementException, StaleElementReferenceException) as e:
+                print(f"Exception : {e}")
+
+
+
+            
 
 
 
@@ -102,17 +124,6 @@ class GoogleMapScraper:
         # scrolling
         flag = True
         i = 0
-        try:
-            checkbox_button = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[1]/div[3]/button')
-            aria_checked = checkbox_button.get_attribute("aria-checked")
-            if aria_checked == "true":
-                print("Checkbox is already checked")
-            else:
-                # Нажимаем на кнопку "Обновлять результаты при смещении карты"
-                checkbox_button.click()
-                print("Checkbox clicked")
-        except NoSuchElementException:
-            print("Checkbox not found")
         while flag:
             print(f"Scrolling to page {i + 2}")
             self.driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scrollable_div)
@@ -122,18 +133,18 @@ class GoogleMapScraper:
                 print("No more results.")
                 flag = False
                 break
-            if "You've reached the end of the list." in self.driver.page_source:
-                flag = False
-
-            self.get_business_info()
-            i += 1
-
-
-latitude_range = [55.138434, 55.920326]
-longitude_range = [36.481755,38.195622]
+            try:
+                self.get_business_info()
+                i += 1
+            except (NoSuchElementException, TimeoutException, StaleElementReferenceException) as e:
+                print(f"Exception during loading companies: {e}")
 
 
-# Шаг изменения координат
+latitude_range = [55.158434, 55.920326]
+longitude_range = [36.781755,38.195622]
+
+
+
 step = 0.2
 
 
@@ -141,14 +152,14 @@ coordinates_combinations = list(itertools.product(
     [round(latitude_range[0] + i * step, 7) for i in range(int((latitude_range[1] - latitude_range[0]) / step) + 1)],
     [round(longitude_range[0] + i * step, 7) for i in range(int((longitude_range[1] - longitude_range[0]) / step) + 1)]
 ))
-# Генерируем URL-адреса
+
 urls = [f"https://www.google.com/maps/search/мужские+костюмы/@{lat},{lng},13z" for lat, lng in coordinates_combinations]
 for index, value in enumerate(urls):
     print(f"Index: {index}, Value: {value}")
 business_scraper = GoogleMapScraper()
 business_scraper.config_driver()
 
-# Загружаем данные для каждого URL-адреса
+
 for url in urls:
     print(url)
     business_scraper.load_companies(url)
