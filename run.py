@@ -102,14 +102,21 @@ class GoogleMapScraper:
                 url = ""
             unique_id = "".join([name, address])
             try:
-                WebDriverWait(self.driver, 20).until(EC.element_to_be_clickable(business)).click()
+                WebDriverWait(self.driver, 20).until(EC.element_to_be_clickable(business))
+                ActionChains(self.driver).move_to_element(business).perform()
+                business.location_once_scrolled_into_view
+                business.click()
                 time.sleep(2)
                 try:
                     website = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[9]/div[5]/a/div/div[2]/div[1]').text
                     print(website)
                 except Exception as e:
-                    website = ''
-                    print(name,e,2)
+                    try:
+                        website = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[9]/div[6]/a/div/div[2]/div[1]').text
+                        print(website)
+                    except:
+                        website = ''
+                        print(name,e,3)
             except Exception as e:
                 website=''
                 print(e)
