@@ -11,6 +11,8 @@ import os
 import itertools
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
+import random
 
 class GoogleMapScraper:
     def __init__(self):
@@ -32,7 +34,7 @@ class GoogleMapScraper:
         
 
     def save_data(self, data):
-        header = ['Название', 'Адрес', 'Категория', 'Номер телефона', "Вебсайт",'Cсылка']
+        header = ['Название', 'Адрес', 'Город', 'Номер телефона', "Вебсайт",'Cсылка']
         is_file_empty = not os.path.isfile(self.output_file_name) or os.stat(self.output_file_name).st_size == 0
 
         with open(self.output_file_name, 'a', newline='', encoding="utf-8") as csvfile:
@@ -73,71 +75,81 @@ class GoogleMapScraper:
         return address, category
 
 
-    def get_business_info(self):
-        time.sleep(2)
-        
-        businesses = self.driver.find_elements(By.CLASS_NAME, 'CpccDe')
-
-        for business in businesses:
-            try:
-                name = business.find_element(By.CLASS_NAME, 'fontHeadlineSmall ').text
-                address, category = self.parse_address_and_category(business)
-                contact = self.parse_contact(business)
-
-                try:
-                    url = business.find_element(By.CLASS_NAME, "hfpxzc").get_attribute("href")
-                except NoSuchElementException:
-                    url = ""
-
-                try:
-                    self.driver.get(url)
-                    website_element = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located(By.CLASS_NAME, 'CsEnBe').get_attribute("href")
-                    )
-                    website = website_element
-                    self.driver.back()
-                except (NoSuchElementException, TimeoutException):
-                    website = ""
-
-                unique_id = "".join([name, address, category, contact, website, url])
-                if unique_id not in self.unique_check:
-                    data = [name, address, category, contact, website, url]
-                    self.save_data(data)
-                    self.unique_check.append(unique_id)
-            except (NoSuchElementException, StaleElementReferenceException) as e:
-                print(f"Exception : {e}")
-
-
-
+    
+            
             
 
-
-
-    def load_companies(self, url):
+    def get_business_info(self):
         
-        print("Getting business info", url)
-        self.driver.get(url)
-        time.sleep(5)
-        panel_xpath = '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[1]/div[1]'
-        scrollable_div = self.driver.find_element(By.XPATH, panel_xpath)
         
-        # scrolling
+        businesses = self.driver.find_elements(By.CLASS_NAME, 'CpccDe')
+        header = ['Название', 'Адрес', 'Город', 'Номер телефона', "Вебсайт",'Cсылка']
+        is_file_empty = not os.path.isfile(self.output_file_name) or os.stat(self.output_file_name).st_size == 0
+        csvfile = open(self.output_file_name, 'a', newline='', encoding="utf-8")
+        writer = csv.writer(csvfile)
+        if is_file_empty:
+            writer.writerow(header)
+        
+        for business in businesses:
+            
+            name = business.find_element(By.CLASS_NAME, 'fontHeadlineSmall ').text
+            address, category = self.parse_address_and_category(business)
+            contact = self.parse_contact(business)
+            city = "Москва"
+            try:
+                url = business.find_element(By.CLASS_NAME, "hfpxzc").get_attribute("href")
+            except NoSuchElementException:
+                url = ""
+            unique_id = "".join([name, address])
+            try:
+                WebDriverWait(self.driver, 20).until(EC.element_to_be_clickable(business)).click()
+                time.sleep(2)
+                try:
+                    website = self.driver.find_element(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[3]/div/div[1]/div/div/div[2]/div[9]/div[5]/a/div/div[2]/div[1]').text
+                    print(website)
+                except Exception as e:
+                    website = ''
+                    print(name,e,2)
+            except Exception as e:
+                website=''
+                print(e)
+            if unique_id not in self.unique_check:
+                data = [name, address, city, contact, website,url]
+                writer.writerow(data)
+                self.unique_check.append(unique_id)
+            
+    def scroll_to_end(self, scrollable_div):
         flag = True
         i = 0
         while flag:
             print(f"Scrolling to page {i + 2}")
+            
             self.driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scrollable_div)
-            time.sleep(2)
+            
+        
+            delay = random.uniform(2, 4)
+            time.sleep(delay)
+
+            
             no_results_element = self.driver.find_elements(By.XPATH, '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[1]/div[1]/div[243]/div/p/span/span')
             if no_results_element:
                 print("No more results.")
                 flag = False
                 break
-            try:
-                self.get_business_info()
-                i += 1
-            except (NoSuchElementException, TimeoutException, StaleElementReferenceException) as e:
-                print(f"Exception during loading companies: {e}")
+            i += 1
+    
+    def load_companies(self, url):
+        
+        print("Getting business info", url)
+        self.driver.get(url)
+        
+        time.sleep(3)
+        panel_xpath = '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[1]/div[1]'
+        scrollable_div = self.driver.find_element(By.XPATH, panel_xpath)
+        self.scroll_to_end(scrollable_div)
+        self.get_business_info()
+        
+            
 
 
 latitude_range = [55.158434, 55.920326]
@@ -145,7 +157,7 @@ longitude_range = [36.781755,38.195622]
 
 
 
-step = 0.2
+step = 0.3
 
 
 coordinates_combinations = list(itertools.product(
@@ -155,11 +167,13 @@ coordinates_combinations = list(itertools.product(
 
 urls = [f"https://www.google.com/maps/search/мужские+костюмы/@{lat},{lng},13z" for lat, lng in coordinates_combinations]
 for index, value in enumerate(urls):
-    print(f"Index: {index}, Value: {value}")
+    print(f"Index: {index+1}, Value: {value}")
 business_scraper = GoogleMapScraper()
 business_scraper.config_driver()
 
+s=1
 
 for url in urls:
-    print(url)
+    print(s,' ', url)
     business_scraper.load_companies(url)
+    s+=1
