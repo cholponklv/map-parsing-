@@ -17,7 +17,7 @@ import random
 
 class GoogleMapScraper:
     def __init__(self):
-        self.output_file_name = "google_map_business_data.csv"
+        self.output_file_name = "Beta2.csv"
         self.headless = False
         self.driver = None
         self.unique_check = []
@@ -87,7 +87,7 @@ class GoogleMapScraper:
             unique_id = "".join([name, address])
             if unique_id not in self.unique_check:
                 contact = self.parse_contact(business)
-                city = "Москва"
+                city = "Санкт-Петербург"
                 try:
                     url = business.find_element(
                         By.CLASS_NAME, "hfpxzc").get_attribute("href")
@@ -120,7 +120,7 @@ class GoogleMapScraper:
                 self.unique_check.append(unique_id)
             else:
                 self.count +=1
-                print("Всего копий:", self.count)
+                print("Всего копий:", self.count, name, address)
          
 
     def scroll_to_end(self, scrollable_div):
@@ -155,8 +155,8 @@ class GoogleMapScraper:
         self.get_business_info()
 
 
-latitude_range = [55.158434, 55.920326]
-longitude_range = [36.781755, 38.195622]
+latitude_range = [59.651476 ,60.225695]
+longitude_range = [29.410784 ,30.808707]
 
 
 step = 0.3
